@@ -1,0 +1,16 @@
+---
+description: mycoder Python 代码风格与工程约定
+globs: **/*.py
+alwaysApply: false
+---
+
+# Python 约定
+
+- 公开函数与方法必须带类型注解；数据结构优先 Pydantic v2 模型（工具参数必须是 Pydantic 模型）
+- 引擎代码（agent loop、工具、provider）不得依赖任何 UI：不许 print，向外 yield 类型化事件；print 只允许出现在 REPL / TUI / CLI 入口层
+- 工具的错误信息是写给模型看的：必须可操作、指明下一步（如"old_string 未找到，请先重新 read_file"），不要裸抛 "Error: not found"
+- 涉及 IO 的引擎代码优先 async/await（Day 1 的同步 REPL 除外）
+- 注释一律中文，只解释"为什么"（意图、权衡、约束），不复述代码在做什么
+- 路径操作用 pathlib；所有文件类工具必须把路径 resolve 后校验落在项目根内
+- 运行/测试一律 `uv run ...`；新增依赖用 `uv add`（dev 依赖 `uv add --dev`），禁止手改版本号瞎猜
+- 提交前跑 `uv run ruff check`（配置见 pyproject.toml，line-length 100）

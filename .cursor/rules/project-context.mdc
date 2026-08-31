@@ -1,0 +1,23 @@
+---
+description: mycoder 项目定位、技术栈与目录结构约定
+alwaysApply: true
+---
+
+# 项目上下文
+
+本仓库是《30天从零构建Cursor级编程智能体.md》的实战项目：按手册逐天构建名为 `mycoder` 的编程智能体 harness（对标 Claude Code / OpenCode 的引擎层）。**手册是唯一事实来源**，实现与手册冲突时以手册为准。
+
+## 技术栈（不要偏离）
+
+- Python 3.12+，包管理一律用 uv（`uv add` / `uv run`），禁止 pip / poetry
+- 模型：本地 Ollama 的 OpenAI 兼容接口（`http://localhost:11434/v1`），默认模型 `qwen3.6:27b`，用 `MYCODER_MODEL` 环境变量切换
+- 数据校验 Pydantic v2；终端 UI Textual；Web 后端 FastAPI + SSE；前端 React 19 + Vite + Tailwind
+- **禁止引入 LangChain / LangGraph 等智能体框架**——agent loop 必须手写，只用薄的库（openai、mcp、Pydantic、Textual、FastAPI）
+
+## 目录结构（src 布局）
+
+- `src/mycoder/agent.py`：Agent Loop（Day 3）
+- `src/mycoder/providers/`：模型适配层（Day 1 ollama.py，Day 21 抽象多 Provider）
+- `src/mycoder/tools/`：工具集（base / files / shell / search / todo / task）
+- `src/mycoder/context/`、`session/`、`permissions/`、`sandbox/`、`indexer/`、`mcp/`、`prompts/`、`tui/`、`server/`：分别对应上下文压缩、会话持久化、权限、Docker 沙箱、代码索引、MCP、系统提示词、TUI、FastAPI 服务
+- `web/`：React 前端（Day 26-28）；`evals/`：评测（Day 22）；`skills/`：技能（Day 20）
