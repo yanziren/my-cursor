@@ -10,7 +10,7 @@ alwaysApply: true
 ## 技术栈（不要偏离）
 
 - Python 3.12+，包管理一律用 uv（`uv add` / `uv run`），禁止 pip / poetry
-- 模型：本地 Ollama 的 OpenAI 兼容接口（`http://localhost:11434/v1`），默认模型 `qwen3.6:27b`，用 `MYCODER_MODEL` 环境变量切换
+- 模型：本地 Ollama 的 OpenAI 兼容接口（`http://localhost:11434/v1`），默认模型 `qwen3.8:27b`，用 `MYCODER_MODEL` 环境变量切换
 - 数据校验 Pydantic v2；终端 UI Textual；Web 后端 FastAPI + SSE；前端 React 19 + Vite + Tailwind
 - **禁止引入 LangChain / LangGraph 等智能体框架**——agent loop 必须手写，只用薄的库（openai、mcp、Pydantic、Textual、FastAPI）
 

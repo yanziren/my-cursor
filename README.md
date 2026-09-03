@@ -2,22 +2,22 @@
 
 按《[30天从零构建Cursor级编程智能体](./30天从零构建Cursor级编程智能体.md)》手册逐天构建的编程智能体（harness 层，对标 Claude Code / OpenCode 的引擎层）。
 
-**当前进度：Day 1 · 流式对话 REPL**
+**当前进度：Day 2 · 工具调用 REPL**
 
 ## 环境要求
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/)（包管理，取代 pip/poetry）
-- [Ollama](https://ollama.com) 在本机运行，并已拉取至少一个对话模型（默认使用 `qwen3.6:27b`）
+- [Ollama](https://ollama.com) 在本机运行，并已拉取至少一个对话模型（默认使用 `qwen3.8:27b`）
 
 ## 快速开始
 
 ```bash
 uv sync          # 安装依赖、创建虚拟环境
-uv run mycoder   # 启动流式对话 REPL，/exit 退出
+uv run mycoder   # 启动工具调用 REPL，/exit 退出，/messages 查看消息序列
 ```
 
-每轮回复结束会打印生成速度（token/s）——低于 15 token/s 建议换低一档模型。
+内置玩具工具：`get_current_time`（问「现在几点」）、`calculator`（算术）。每轮结束打印完整 messages 序列与生成速度。
 
 ## 切换模型
 
@@ -25,7 +25,7 @@ uv run mycoder   # 启动流式对话 REPL，/exit 退出
 
 ```bash
 MYCODER_MODEL=qwen3:8b uv run mycoder
-MYCODER_MODEL=qwen3-coder:30b uv run mycoder   # 手册首选，需先 ollama pull
+MYCODER_MODEL=qwen3-coder:30b uv run mycoder   # 可选：Agent 专项 MoE 模型，需先 ollama pull
 ```
 
 ## 重要：调大 Ollama 上下文窗口
@@ -44,7 +44,7 @@ launchctl setenv OLLAMA_CONTEXT_LENGTH 32768
 ## 已踩的坑
 
 - **macOS 系统代理会劫持 localhost 请求**：openai SDK 底层的 httpx 默认信任系统代理，开着代理（Clash/V2Ray 等）时请求本机 Ollama 会得到 502。已在 `providers/ollama.py` 中用 `trust_env=False` 强制直连。
-- `qwen3.6:27b` 是思考型模型：思考过程走 Ollama 扩展的 `reasoning` 字段流式返回，REPL 以降暗文字展示，且不写回消息历史（省上下文）。
+- `qwen3.8:27b` 是思考型模型：思考过程走 Ollama 扩展的 `reasoning` 字段流式返回，REPL 以降暗文字展示，且不写回消息历史（省上下文）。
 
 ## 目录结构
 

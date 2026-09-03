@@ -1,17 +1,80 @@
-"""Day 1 · 流式对话 REPL：在终端与本地 Ollama 模型连续多轮对话。"""
+"""Day 2 · 工具调用 REPL：模型请求工具 → 本地执行 → 结果回传 → 模型总结。"""
 
+import asyncio
+import json
 import time
 
 from mycoder.providers.ollama import OllamaProvider
+from mycoder.tools import DEFAULT_TOOLS, ToolRegistry
 
-SYSTEM_PROMPT = "你是一个简洁的中文助手。"
+SYSTEM_PROMPT = (
+    "你是一个简洁的中文助手，可以调用工具获取真实时间或做数学计算。"
+    "需要真实时间或精确计算时用工具；问候和闲聊直接回答，不要滥用工具。"
+)
 DIM, RESET = "\033[2m", "\033[0m"
+
+
+def print_messages(messages: list[dict]) -> None:
+    """打印完整消息序列，便于对照 assistant(tool_calls) 与 tool 消息结构。"""
+    print(f"\n{DIM}--- 消息序列 ---{RESET}")
+    print(json.dumps(messages, ensure_ascii=False, indent=2))
+    print(f"{DIM}--- 结束 ---{RESET}\n")
+
+
+async def run_turn(
+    provider: OllamaProvider,
+    registry: ToolRegistry,
+    messages: list[dict],
+    user_input: str,
+) -> None:
+    messages.append({"role": "user", "content": user_input})
+    tool_schemas = registry.schemas()
+    start = time.monotonic()
+
+    # 第一次调用：模型决定是否请求工具
+    response = provider.chat(messages, tools=tool_schemas)
+    messages.append(response.message)
+
+    if response.tool_calls:
+        print(f"{DIM}[模型请求 {len(response.tool_calls)} 个工具调用]{RESET}")
+        for call in response.tool_calls:
+            name = call.function.name
+            args = call.function.arguments
+            print(f"{DIM}  → {name}({args}){RESET}")
+            result = await registry.dispatch(name, args)
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call.id,
+                    "content": result,
+                }
+            )
+
+        print_messages(messages)
+
+        # 第二次调用：模型根据工具结果生成最终回答
+        final = provider.chat(messages, tools=tool_schemas)
+        messages.append(final.message)
+        reply = final.content or ""
+    else:
+        reply = response.content or ""
+
+    print(reply)
+    elapsed = time.monotonic() - start
+    tokens = provider.last_completion_tokens or len(reply) // 3
+    speed = tokens / elapsed if elapsed > 0 else 0.0
+    print(f"\n{DIM}[{tokens} token · {elapsed:.1f}s · {speed:.1f} token/s]{RESET}")
+    print_messages(messages)
 
 
 def main() -> None:
     provider = OllamaProvider()
+    registry = ToolRegistry(DEFAULT_TOOLS)
     messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
-    print(f"mycoder · Day 1 流式 REPL · 模型 {provider.model} · 输入 /exit 退出")
+    print(
+        f"mycoder · Day 2 工具调用 REPL · 模型 {provider.model} · "
+        "输入 /exit 退出 · /messages 查看历史"
+    )
 
     while True:
         try:
@@ -23,32 +86,12 @@ def main() -> None:
             continue
         if user_input in {"/exit", "/quit"}:
             return
+        if user_input == "/messages":
+            print_messages(messages)
+            continue
 
-        # 模型无状态：每轮把完整历史重新发送，这就是"多轮记忆"的全部真相
-        messages.append({"role": "user", "content": user_input})
-        reply_parts: list[str] = []
-        thinking = False
-        start = time.monotonic()
-        print()
-        for kind, delta in provider.stream_chat(messages):
-            if kind == "reasoning" and not thinking:
-                thinking = True
-                print(DIM, end="")  # 思考过程降暗显示，与正式回复区分
-            elif kind == "content" and thinking:
-                thinking = False
-                print(f"{RESET}\n")
-            print(delta, end="", flush=True)
-            if kind == "content":
-                reply_parts.append(delta)
-        if thinking:
-            print(RESET, end="")
-        elapsed = time.monotonic() - start
+        asyncio.run(run_turn(provider, registry, messages, user_input))
 
-        # 思考过程不写回历史：它不是对话内容，还会白白吃掉上下文窗口
-        reply = "".join(reply_parts)
-        messages.append({"role": "assistant", "content": reply})
 
-        # 生成速度是 Day 1 验收项：低于 15 token/s 应换低一档模型；无用量数据时按字符数/3 粗估
-        tokens = provider.last_completion_tokens or len(reply) // 3
-        speed = tokens / elapsed if elapsed > 0 else 0.0
-        print(f"\n\n{DIM}[{tokens} token · {elapsed:.1f}s · {speed:.1f} token/s]{RESET}")
+if __name__ == "__main__":
+    main()
