@@ -6,12 +6,14 @@ import os
 import time
 
 from mycoder.agent import Agent
+from mycoder.context.budget import format_meter
 from mycoder.events import (
     TextDelta,
     ThinkingDelta,
     ToolCallEnd,
     ToolCallStart,
     TurnEnd,
+    UsageUpdate,
 )
 from mycoder.prompts.system import build_system_prompt, estimate_tokens
 from mycoder.providers.ollama import OllamaProvider
@@ -45,6 +47,9 @@ async def run_turn(agent: Agent, user_input: str) -> None:
             print(f"\n{DIM}{summarize_tool_start(event.name, event.arguments)}{RESET}")
         elif isinstance(event, ToolCallEnd):
             print(f"{DIM}  {event.summary}{RESET}")
+        elif isinstance(event, UsageUpdate):
+            mark = "~" if event.estimated else ""
+            print(f"{DIM}[上下文 {format_meter(event.used_tokens, event.context_limit)}{mark}]{RESET}")
         elif isinstance(event, TurnEnd):
             turns = event.turn
             tokens = event.completion_tokens

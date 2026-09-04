@@ -9,6 +9,7 @@ from textual.binding import Binding
 from textual.widgets import Footer, Header, Input, Static
 
 from mycoder.agent import Agent
+from mycoder.context.budget import format_meter
 from mycoder.events import (
     ErrorEvent,
     TextDelta,
@@ -16,6 +17,7 @@ from mycoder.events import (
     ToolCallEnd,
     ToolCallStart,
     TurnEnd,
+    UsageUpdate,
 )
 from mycoder.prompts.system import build_system_prompt, estimate_tokens
 from mycoder.providers.ollama import OllamaProvider
@@ -43,6 +45,13 @@ class MycoderApp(App):
         height: 1;
         background: $panel;
         color: $text-muted;
+        padding: 0 1;
+    }
+    #context-bar {
+        dock: bottom;
+        height: 1;
+        background: $surface;
+        color: $foreground;
         padding: 0 1;
     }
     Input {
@@ -80,13 +89,20 @@ class MycoderApp(App):
     def compose(self) -> ComposeResult:
         yield Header()
         yield ChatPane(id="chat")
+        yield Static("", id="context-bar")
         yield Static("", id="status-bar")
         yield Input(placeholder="输入任务，Enter 发送 · Ctrl+L 清屏 · Ctrl+C 退出", id="prompt")
         yield Footer()
 
     def on_mount(self) -> None:
+        self._update_context_meter(self.agent.budget.used, estimated=True)
         self._update_status("就绪")
         self.query_one(Input).focus()
+
+    def _update_context_meter(self, used: int, *, estimated: bool) -> None:
+        meter = format_meter(used, self.agent.budget.limit)
+        suffix = " ~" if estimated else ""
+        self.query_one("#context-bar", Static).update(f"上下文 {meter}{suffix}")
 
     def _update_status(self, hint: str) -> None:
         bar = self.query_one("#status-bar", Static)
@@ -133,6 +149,8 @@ class MycoderApp(App):
                 tool = self._open_tools.get(event.call_id)
                 if tool is not None:
                     tool.finish(event)
+            elif isinstance(event, UsageUpdate):
+                self._update_context_meter(event.used_tokens, estimated=event.estimated)
             elif isinstance(event, TurnEnd):
                 if self._assistant is not None:
                     self._assistant.finalize()
@@ -149,6 +167,9 @@ class MycoderApp(App):
     def action_clear_chat(self) -> None:
         chat = self.query_one("#chat", ChatPane)
         chat.remove_children()
+        self.agent.messages = [self.agent.messages[0]]
+        self.agent.budget.used = self.agent.budget.record_estimate(self.agent.messages)
+        self._update_context_meter(self.agent.budget.used, estimated=True)
         self._update_status("已清屏")
 
 

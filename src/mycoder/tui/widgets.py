@@ -111,22 +111,23 @@ class ToolBubble(Static):
     def __init__(self, start: ToolCallStart) -> None:
         super().__init__()
         self._title = summarize_tool_start(start.name, start.arguments)
-        self._collapsible: Collapsible | None = None
-        self._detail: Static | None = None
         self._finished = False
 
-    def on_mount(self) -> None:
-        self._detail = Static("执行中…", classes="tool-detail")
-        self._collapsible = Collapsible(self._title, collapsed=True)
-        self._collapsible.mount(self._detail)
-        self.mount(self._collapsible)
+    def compose(self):
+        yield Collapsible(
+            Static("执行中…", classes="tool-detail"),
+            title=self._title,
+            collapsed=True,
+        )
 
     def finish(self, end: ToolCallEnd) -> None:
-        if self._finished or self._collapsible is None or self._detail is None:
+        if self._finished:
             return
         self._finished = True
-        self._collapsible.title = f"{self._title}  {end.summary}"
+        collapsible = self.query_one(Collapsible)
+        detail = self.query_one(".tool-detail", Static)
+        collapsible.title = f"{self._title}  {end.summary}"
         preview = end.result
         if len(preview) > 4000:
             preview = preview[:4000] + "\n…（已截断）"
-        self._detail.update(preview)
+        detail.update(preview)

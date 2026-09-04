@@ -1,0 +1,26 @@
+[
+  {
+    "context_length": 8192,
+    "elapsed_s": 18.66,
+    "prompt_tokens": 17,
+    "completion_tokens": 101,
+    "token_per_s": 5.4,
+    "ollama_ps": "NAME           ID              SIZE     PROCESSOR    CONTEXT    UNTIL              \nqwen3.8:27b    22130167c4c2    18 GB    100% GPU     32768      4 minutes from now"
+  },
+  {
+    "context_length": 16384,
+    "elapsed_s": 25.98,
+    "prompt_tokens": 17,
+    "completion_tokens": 130,
+    "token_per_s": 5.0,
+    "ollama_ps": "NAME           ID              SIZE     PROCESSOR    CONTEXT    UNTIL              \nqwen3.8:27b    22130167c4c2    18 GB    100% GPU     32768      4 minutes from now"
+  },
+  {
+    "context_length": 32768,
+    "elapsed_s": 30.43,
+    "prompt_tokens": 17,
+    "completion_tokens": 165,
+    "token_per_s": 5.4,
+    "ollama_ps": "NAME           ID              SIZE     PROCESSOR    CONTEXT    UNTIL              \nqwen3.8:27b    22130167c4c2    18 GB    100% GPU     32768      4 minutes from now"
+  }
+]

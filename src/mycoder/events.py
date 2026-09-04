@@ -44,6 +44,18 @@ class TurnEnd:
     turn: int
     content: str
     completion_tokens: int | None = None
+    prompt_tokens: int | None = None
+
+
+@dataclass(frozen=True)
+class UsageUpdate:
+    """上下文 token 用量更新（每轮模型调用后发出）。"""
+
+    used_tokens: int
+    context_limit: int
+    prompt_tokens: int
+    completion_tokens: int
+    estimated: bool = False
 
 
 @dataclass(frozen=True)
@@ -53,7 +65,15 @@ class ErrorEvent:
     message: str
 
 
-AgentEvent = TextDelta | ThinkingDelta | ToolCallStart | ToolCallEnd | TurnEnd | ErrorEvent
+AgentEvent = (
+    TextDelta
+    | ThinkingDelta
+    | ToolCallStart
+    | ToolCallEnd
+    | TurnEnd
+    | UsageUpdate
+    | ErrorEvent
+)
 
 EventKind = Literal[
     "text_delta",
@@ -61,5 +81,6 @@ EventKind = Literal[
     "tool_call_start",
     "tool_call_end",
     "turn_end",
+    "usage_update",
     "error",
 ]

@@ -2,7 +2,7 @@
 
 按《[30天从零构建Cursor级编程智能体](./30天从零构建Cursor级编程智能体.md)》手册逐天构建的编程智能体（harness 层，对标 Claude Code / OpenCode 的引擎层）。
 
-**当前进度：Day 7 · Textual TUI 与事件流架构**
+**当前进度：Day 8 · Token 计量与上下文预算**
 
 ## 环境要求
 
@@ -28,6 +28,19 @@ Day 5 闭环示例（故意埋 bug 的计算器）：
 MYCODER_WORKSPACE=examples/demo_project uv run mycoder
 # 提示：修复失败的测试，改完后用 pytest 验证通过
 ```
+
+TUI 底栏显示上下文仪表（`▓▓▓░░ 41% (13.2K/32K)`），以 API `usage` 为准。
+
+```bash
+# 上下文窗口（与 TUI 仪表上限对齐，修改后需重启 Ollama）
+launchctl setenv OLLAMA_CONTEXT_LENGTH 32768
+MYCODER_CONTEXT_LENGTH=32768 uv run mycoder   # 可选：覆盖仪表显示上限
+
+# 8K/16K/32K 窗口速度实测
+uv run python scripts/benchmark_context.py
+```
+
+详见 [Ollama 上下文实测](./docs/ollama_context_benchmark.md)。
 
 Day 7 里程碑（见 [第一周复盘](./docs/week1_retrospective.md)）：
 

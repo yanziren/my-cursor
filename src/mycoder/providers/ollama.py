@@ -14,6 +14,15 @@ DEFAULT_MODEL = "qwen3.8:27b"
 
 
 @dataclass
+class UsageStats:
+    """OpenAI 兼容 usage 字段快照。"""
+
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+
+@dataclass
 class ChatResponse:
     """非流式 chat 返回值：assistant 历史消息 + 便于 harness 消费的字段。"""
 
@@ -38,6 +47,20 @@ class OllamaProvider:
             http_client=httpx2.Client(trust_env=False),
         )
         self.last_completion_tokens: int | None = None
+        self.last_usage: UsageStats | None = None
+
+    def _record_usage(self, usage: object | None) -> None:
+        if usage is None:
+            return
+        prompt = getattr(usage, "prompt_tokens", None) or 0
+        completion = getattr(usage, "completion_tokens", None) or 0
+        total = getattr(usage, "total_tokens", None) or (prompt + completion)
+        self.last_usage = UsageStats(
+            prompt_tokens=prompt,
+            completion_tokens=completion,
+            total_tokens=total,
+        )
+        self.last_completion_tokens = completion or self.last_completion_tokens
 
     def chat(
         self,
@@ -46,6 +69,7 @@ class OllamaProvider:
     ) -> ChatResponse:
         """非流式对话；Day 2 起用于工具调用往返（解析 tool_calls 比流式简单）。"""
         self.last_completion_tokens = None
+        self.last_usage = None
         kwargs: dict = {
             "model": self.model,
             "messages": messages,
@@ -55,8 +79,7 @@ class OllamaProvider:
             kwargs["tools"] = tools
 
         response = self.client.chat.completions.create(**kwargs)
-        if response.usage:
-            self.last_completion_tokens = response.usage.completion_tokens
+        self._record_usage(response.usage)
 
         choice = response.choices[0]
         msg = choice.message
@@ -89,6 +112,8 @@ class OllamaProvider:
         self,
         messages: list[dict],
         tools: list[dict] | None = None,
+        *,
+        num_ctx: int | None = None,
     ) -> Iterator[tuple[str, object]]:
         """流式 chat（含工具调用）；产出 (kind, payload)。
 
@@ -98,6 +123,7 @@ class OllamaProvider:
         - complete: ChatResponse 完整一轮响应
         """
         self.last_completion_tokens = None
+        self.last_usage = None
         kwargs: dict = {
             "model": self.model,
             "messages": messages,
@@ -107,6 +133,8 @@ class OllamaProvider:
         }
         if tools:
             kwargs["tools"] = tools
+        if num_ctx is not None:
+            kwargs["extra_body"] = {"options": {"num_ctx": num_ctx}}
 
         stream = self.client.chat.completions.create(**kwargs)
 
@@ -117,7 +145,7 @@ class OllamaProvider:
 
         for chunk in stream:
             if chunk.usage:
-                self.last_completion_tokens = chunk.usage.completion_tokens
+                self._record_usage(chunk.usage)
             if not chunk.choices:
                 continue
 
@@ -207,7 +235,7 @@ class OllamaProvider:
         )
         for chunk in stream:
             if chunk.usage:
-                self.last_completion_tokens = chunk.usage.completion_tokens
+                self._record_usage(chunk.usage)
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta

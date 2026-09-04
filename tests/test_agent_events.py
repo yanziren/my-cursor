@@ -32,6 +32,7 @@ class FakeProvider:
     """模拟 stream_chat_with_tools，供 harness 单测。"""
 
     last_completion_tokens: int | None = 10
+    last_usage = None
 
     def __init__(self, responses: list[ChatResponse]) -> None:
         self._responses = list(responses)
