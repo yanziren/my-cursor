@@ -1,4 +1,4 @@
-"""Day 5 · Agent Loop REPL：bash 自我验证 + glob/grep 搜索。"""
+"""Day 6 · Agent Loop REPL：结构化系统提示词 + AGENTS.md。"""
 
 import asyncio
 import json
@@ -6,16 +6,11 @@ import os
 import time
 
 from mycoder.agent import Agent
+from mycoder.prompts.system import build_system_prompt, estimate_tokens
 from mycoder.providers.ollama import OllamaProvider
 from mycoder.tools import DEFAULT_TOOLS, ToolRegistry
+from mycoder.tools.files import workspace_root
 
-SYSTEM_PROMPT = (
-    "你是一个简洁的中文编程助手，可以 read/write/edit 文件，用 bash 跑测试与命令，"
-    "用 glob/grep 搜索代码。"
-    "修改代码后必须用 bash 运行测试或相关命令验证；大仓库先用 grep/glob 定位再 read_file。"
-    "改文件前必须先 read_file；局部修改用 edit_file，新建用 write_file。"
-    "问候和闲聊直接回答，不要滥用工具。"
-)
 DIM, RESET = "\033[2m", "\033[0m"
 
 
@@ -44,13 +39,24 @@ async def run_turn(agent: Agent, user_input: str) -> None:
 def main() -> None:
     provider = OllamaProvider()
     registry = ToolRegistry(DEFAULT_TOOLS)
+    ws = workspace_root()
+    minimal = os.getenv("MYCODER_MINIMAL_PROMPT", "").lower() in {"1", "true", "yes"}
+    system_prompt = build_system_prompt(
+        DEFAULT_TOOLS,
+        ws,
+        include_agents=not os.getenv("MYCODER_SKIP_AGENTS"),
+        minimal=minimal,
+    )
     max_turns = int(os.getenv("MYCODER_MAX_TURNS", "20"))
-    agent = Agent(provider, registry, SYSTEM_PROMPT, max_turns=max_turns, verbose=True)
-    ws = os.getenv("MYCODER_WORKSPACE", os.getcwd())
+    agent = Agent(provider, registry, system_prompt, max_turns=max_turns, verbose=True)
+    prompt_tokens = estimate_tokens(system_prompt)
+
     print(
-        f"mycoder · Day 5 bash/搜索 REPL · 模型 {provider.model} · max_turns={max_turns}\n"
-        f"工作区: {ws}\n"
-        "工具：read/write/edit/bash/glob/grep · /exit · /messages · MYCODER_MAX_TURNS"
+        f"mycoder · Day 6 系统提示词 REPL · 模型 {provider.model} · max_turns={max_turns}\n"
+        f"工作区: {ws} · 系统提示词约 {prompt_tokens} token"
+        f"{' (minimal)' if minimal else ''}\n"
+        "命令: /exit · /messages · /prompt\n"
+        "环境: MYCODER_MAX_TURNS · MYCODER_MINIMAL_PROMPT=1（对比实验）"
     )
 
     while True:
@@ -65,6 +71,11 @@ def main() -> None:
             return
         if user_input == "/messages":
             print_messages(agent.messages)
+            continue
+        if user_input == "/prompt":
+            print(f"\n{DIM}--- 系统提示词 (~{prompt_tokens} token) ---{RESET}")
+            print(system_prompt)
+            print(f"{DIM}--- 结束 ---{RESET}\n")
             continue
 
         asyncio.run(run_turn(agent, user_input))

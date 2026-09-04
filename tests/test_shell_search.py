@@ -1,6 +1,5 @@
 """Day 5 · bash / glob / grep harness 单测。"""
 
-import asyncio
 from pathlib import Path
 
 import pytest

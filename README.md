@@ -2,7 +2,7 @@
 
 按《[30天从零构建Cursor级编程智能体](./30天从零构建Cursor级编程智能体.md)》手册逐天构建的编程智能体（harness 层，对标 Claude Code / OpenCode 的引擎层）。
 
-**当前进度：Day 5 · bash 自我验证 + glob/grep 搜索**
+**当前进度：Day 6 · 系统提示词与 AGENTS.md**
 
 ## 环境要求
 
@@ -25,6 +25,15 @@ Day 5 闭环示例（故意埋 bug 的计算器）：
 MYCODER_WORKSPACE=examples/demo_project uv run mycoder
 # 提示：修复失败的测试，改完后用 pytest 验证通过
 ```
+
+Day 6 对比实验（同一任务，观察是否主动跑测试）：
+
+```bash
+MYCODER_WORKSPACE=examples/demo_project MYCODER_MINIMAL_PROMPT=1 uv run mycoder  # 极简提示词
+MYCODER_WORKSPACE=examples/demo_project uv run mycoder                          # 完整提示词
+```
+
+项目约定见根目录 `AGENTS.md`（如「注释一律中文」）。REPL 内 `/prompt` 可查看完整系统提示词。
 
 ```bash
 uv run pytest tests/ -v              # harness 单测
