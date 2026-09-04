@@ -1,4 +1,4 @@
-"""Day 6 · Agent Loop REPL：结构化系统提示词 + AGENTS.md。"""
+"""Day 7 · Agent Loop REPL：消费事件流（print 模式，--repl 备用）。"""
 
 import asyncio
 import json
@@ -6,8 +6,16 @@ import os
 import time
 
 from mycoder.agent import Agent
+from mycoder.events import (
+    TextDelta,
+    ThinkingDelta,
+    ToolCallEnd,
+    ToolCallStart,
+    TurnEnd,
+)
 from mycoder.prompts.system import build_system_prompt, estimate_tokens
 from mycoder.providers.ollama import OllamaProvider
+from mycoder.tool_summary import summarize_tool_start
 from mycoder.tools import DEFAULT_TOOLS, ToolRegistry
 from mycoder.tools.files import workspace_root
 
@@ -23,14 +31,32 @@ def print_messages(messages: list[dict]) -> None:
 
 async def run_turn(agent: Agent, user_input: str) -> None:
     start = time.monotonic()
-    reply, turns = await agent.run(user_input)
-    elapsed = time.monotonic() - start
+    reply_parts: list[str] = []
+    turns = 0
+    tokens: int | None = None
 
-    print(reply)
-    tokens = agent.provider.last_completion_tokens or len(reply) // 3
-    speed = tokens / elapsed if elapsed > 0 else 0.0
+    async for event in agent.run(user_input):
+        if isinstance(event, ThinkingDelta):
+            print(f"{DIM}{event.text}{RESET}", end="", flush=True)
+        elif isinstance(event, TextDelta):
+            print(event.text, end="", flush=True)
+            reply_parts.append(event.text)
+        elif isinstance(event, ToolCallStart):
+            print(f"\n{DIM}{summarize_tool_start(event.name, event.arguments)}{RESET}")
+        elif isinstance(event, ToolCallEnd):
+            print(f"{DIM}  {event.summary}{RESET}")
+        elif isinstance(event, TurnEnd):
+            turns = event.turn
+            tokens = event.completion_tokens
+            if event.content and not reply_parts:
+                print(event.content)
+            print()
+
+    elapsed = time.monotonic() - start
+    token_count = tokens or sum(len(p) for p in reply_parts) // 3
+    speed = token_count / elapsed if elapsed > 0 else 0.0
     print(
-        f"\n{DIM}[{turns} 轮 · {tokens} token · {elapsed:.1f}s · {speed:.1f} token/s]"
+        f"\n{DIM}[{turns} 轮 · {token_count} token · {elapsed:.1f}s · {speed:.1f} token/s]"
         f"{RESET}"
     )
     print_messages(agent.messages)
@@ -48,15 +74,15 @@ def main() -> None:
         minimal=minimal,
     )
     max_turns = int(os.getenv("MYCODER_MAX_TURNS", "20"))
-    agent = Agent(provider, registry, system_prompt, max_turns=max_turns, verbose=True)
+    agent = Agent(provider, registry, system_prompt, max_turns=max_turns)
     prompt_tokens = estimate_tokens(system_prompt)
 
     print(
-        f"mycoder · Day 6 系统提示词 REPL · 模型 {provider.model} · max_turns={max_turns}\n"
+        f"mycoder · REPL 模式 · 模型 {provider.model} · max_turns={max_turns}\n"
         f"工作区: {ws} · 系统提示词约 {prompt_tokens} token"
         f"{' (minimal)' if minimal else ''}\n"
         "命令: /exit · /messages · /prompt\n"
-        "环境: MYCODER_MAX_TURNS · MYCODER_MINIMAL_PROMPT=1（对比实验）"
+        "提示: 默认请用 TUI（uv run mycoder），本模式供调试"
     )
 
     while True:

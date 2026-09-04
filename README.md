@@ -2,7 +2,7 @@
 
 按《[30天从零构建Cursor级编程智能体](./30天从零构建Cursor级编程智能体.md)》手册逐天构建的编程智能体（harness 层，对标 Claude Code / OpenCode 的引擎层）。
 
-**当前进度：Day 6 · 系统提示词与 AGENTS.md**
+**当前进度：Day 7 · Textual TUI 与事件流架构**
 
 ## 环境要求
 
@@ -14,8 +14,11 @@
 
 ```bash
 uv sync          # 安装依赖、创建虚拟环境
-uv run mycoder   # 启动 Agent Loop REPL，/exit 退出，/messages 查看消息序列
+uv run mycoder   # 启动 Textual TUI（默认）
+uv run mycoder --repl   # 旧版 print REPL，调试用
 ```
+
+TUI 快捷键：`Ctrl+C` 退出 · `Ctrl+L` 清屏 · Enter 发送。
 
 内置工具：`read_file`、`write_file`、`edit_file`、`bash`、`glob`、`grep`，以及玩具工具 `get_current_time`、`calculator`。文件路径相对项目根，越界路径会被拒绝。工作区根目录默认是当前目录，可用 `MYCODER_WORKSPACE` 覆盖。
 
@@ -26,11 +29,19 @@ MYCODER_WORKSPACE=examples/demo_project uv run mycoder
 # 提示：修复失败的测试，改完后用 pytest 验证通过
 ```
 
-Day 6 对比实验（同一任务，观察是否主动跑测试）：
+Day 7 里程碑（见 [第一周复盘](./docs/week1_retrospective.md)）：
 
 ```bash
-MYCODER_WORKSPACE=examples/demo_project MYCODER_MINIMAL_PROMPT=1 uv run mycoder  # 极简提示词
-MYCODER_WORKSPACE=examples/demo_project uv run mycoder                          # 完整提示词
+MYCODER_WORKSPACE=examples/demo_project uv run mycoder
+# 任务 A：修复 calc.add 测试
+# 任务 B：新增 subtract 函数与测试
+```
+
+Day 6 对比实验（`--repl` 模式）：
+
+```bash
+MYCODER_WORKSPACE=examples/demo_project MYCODER_MINIMAL_PROMPT=1 uv run mycoder --repl
+MYCODER_WORKSPACE=examples/demo_project uv run mycoder --repl
 ```
 
 项目约定见根目录 `AGENTS.md`（如「注释一律中文」）。REPL 内 `/prompt` 可查看完整系统提示词。

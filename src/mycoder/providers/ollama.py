@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import httpx2
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageToolCall
+from openai.types.chat.chat_completion_message_tool_call import Function
 
 DEFAULT_BASE_URL = "http://localhost:11434/v1"
 DEFAULT_MODEL = "qwen3.8:27b"
@@ -82,6 +83,111 @@ class OllamaProvider:
             content=msg.content,
             tool_calls=tool_calls,
             finish_reason=choice.finish_reason,
+        )
+
+    def stream_chat_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+    ) -> Iterator[tuple[str, object]]:
+        """流式 chat（含工具调用）；产出 (kind, payload)。
+
+        kind:
+        - reasoning: str 增量
+        - content: str 增量
+        - complete: ChatResponse 完整一轮响应
+        """
+        self.last_completion_tokens = None
+        kwargs: dict = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        }
+        if tools:
+            kwargs["tools"] = tools
+
+        stream = self.client.chat.completions.create(**kwargs)
+
+        content_parts: list[str] = []
+        reasoning_parts: list[str] = []
+        tool_calls_acc: dict[int, dict[str, str]] = {}
+        finish_reason: str | None = None
+
+        for chunk in stream:
+            if chunk.usage:
+                self.last_completion_tokens = chunk.usage.completion_tokens
+            if not chunk.choices:
+                continue
+
+            choice = chunk.choices[0]
+            if choice.finish_reason:
+                finish_reason = choice.finish_reason
+
+            delta = choice.delta
+            reasoning = getattr(delta, "reasoning", None)
+            if reasoning:
+                reasoning_parts.append(reasoning)
+                yield "reasoning", reasoning
+
+            if delta.content:
+                content_parts.append(delta.content)
+                yield "content", delta.content
+
+            if delta.tool_calls:
+                for tc in delta.tool_calls:
+                    idx = tc.index
+                    if idx not in tool_calls_acc:
+                        tool_calls_acc[idx] = {"id": "", "name": "", "arguments": ""}
+                    if tc.id:
+                        tool_calls_acc[idx]["id"] = tc.id
+                    if tc.function:
+                        if tc.function.name:
+                            tool_calls_acc[idx]["name"] = tc.function.name
+                        if tc.function.arguments:
+                            tool_calls_acc[idx]["arguments"] += tc.function.arguments
+
+        tool_calls: list[ChatCompletionMessageToolCall] | None = None
+        if tool_calls_acc:
+            tool_calls = []
+            for idx in sorted(tool_calls_acc):
+                entry = tool_calls_acc[idx]
+                tool_calls.append(
+                    ChatCompletionMessageToolCall(
+                        id=entry["id"] or f"call_{idx}",
+                        type="function",
+                        function=Function(
+                            name=entry["name"],
+                            arguments=entry["arguments"],
+                        ),
+                    )
+                )
+
+        raw_content = "".join(content_parts) or None
+        content = raw_content if not tool_calls else (raw_content or "")
+        assistant_message: dict = {"role": "assistant", "content": content}
+        if tool_calls:
+            assistant_message["tool_calls"] = [
+                {
+                    "id": call.id,
+                    "type": "function",
+                    "function": {
+                        "name": call.function.name,
+                        "arguments": call.function.arguments,
+                    },
+                }
+                for call in tool_calls
+            ]
+
+        yield (
+            "complete",
+            ChatResponse(
+                message=assistant_message,
+                content=raw_content,
+                tool_calls=tool_calls,
+                finish_reason=finish_reason,
+            ),
         )
 
     def stream_chat(self, messages: list[dict]) -> Iterator[tuple[str, str]]:
