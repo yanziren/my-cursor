@@ -2,7 +2,7 @@
 
 按《[30天从零构建Cursor级编程智能体](./30天从零构建Cursor级编程智能体.md)》手册逐天构建的编程智能体（harness 层，对标 Claude Code / OpenCode 的引擎层）。
 
-**当前进度：Day 4 · 文件 read / write / edit**
+**当前进度：Day 5 · bash 自我验证 + glob/grep 搜索**
 
 ## 环境要求
 
@@ -17,7 +17,19 @@ uv sync          # 安装依赖、创建虚拟环境
 uv run mycoder   # 启动 Agent Loop REPL，/exit 退出，/messages 查看消息序列
 ```
 
-内置工具：`read_file`、`write_file`、`edit_file`（精确字符串替换）、`get_current_time`、`calculator`。文件路径相对项目根，越界路径会被拒绝。工作区根目录默认是当前目录，可用 `MYCODER_WORKSPACE` 覆盖。
+内置工具：`read_file`、`write_file`、`edit_file`、`bash`、`glob`、`grep`，以及玩具工具 `get_current_time`、`calculator`。文件路径相对项目根，越界路径会被拒绝。工作区根目录默认是当前目录，可用 `MYCODER_WORKSPACE` 覆盖。
+
+Day 5 闭环示例（故意埋 bug 的计算器）：
+
+```bash
+MYCODER_WORKSPACE=examples/demo_project uv run mycoder
+# 提示：修复失败的测试，改完后用 pytest 验证通过
+```
+
+```bash
+uv run pytest tests/ -v              # harness 单测
+uv run pytest examples/demo_project/tests -v  # 示例项目（修复前应失败）
+```
 
 ## 切换模型
 

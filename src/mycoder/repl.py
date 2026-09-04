@@ -1,4 +1,4 @@
-"""Day 4 · Agent Loop REPL：读 / 写 / 编辑文件。"""
+"""Day 5 · Agent Loop REPL：bash 自我验证 + glob/grep 搜索。"""
 
 import asyncio
 import json
@@ -10,10 +10,11 @@ from mycoder.providers.ollama import OllamaProvider
 from mycoder.tools import DEFAULT_TOOLS, ToolRegistry
 
 SYSTEM_PROMPT = (
-    "你是一个简洁的中文编程助手，可以 read_file / write_file / edit_file 操作项目内文件，"
-    "也可获取时间或做计算。"
-    "改文件前必须先 read_file 获取精确原文；局部修改用 edit_file（old_string/new_string），"
-    "新建或整文件重写用 write_file。问候和闲聊直接回答，不要滥用工具。"
+    "你是一个简洁的中文编程助手，可以 read/write/edit 文件，用 bash 跑测试与命令，"
+    "用 glob/grep 搜索代码。"
+    "修改代码后必须用 bash 运行测试或相关命令验证；大仓库先用 grep/glob 定位再 read_file。"
+    "改文件前必须先 read_file；局部修改用 edit_file，新建用 write_file。"
+    "问候和闲聊直接回答，不要滥用工具。"
 )
 DIM, RESET = "\033[2m", "\033[0m"
 
@@ -45,9 +46,11 @@ def main() -> None:
     registry = ToolRegistry(DEFAULT_TOOLS)
     max_turns = int(os.getenv("MYCODER_MAX_TURNS", "20"))
     agent = Agent(provider, registry, SYSTEM_PROMPT, max_turns=max_turns, verbose=True)
+    ws = os.getenv("MYCODER_WORKSPACE", os.getcwd())
     print(
-        f"mycoder · Day 4 文件工具 REPL · 模型 {provider.model} · max_turns={max_turns}\n"
-        "工具：read_file / write_file / edit_file · /exit · /messages · MYCODER_MAX_TURNS"
+        f"mycoder · Day 5 bash/搜索 REPL · 模型 {provider.model} · max_turns={max_turns}\n"
+        f"工作区: {ws}\n"
+        "工具：read/write/edit/bash/glob/grep · /exit · /messages · MYCODER_MAX_TURNS"
     )
 
     while True:
