@@ -2,7 +2,7 @@
 
 按《[30天从零构建Cursor级编程智能体](./30天从零构建Cursor级编程智能体.md)》手册逐天构建的编程智能体（harness 层，对标 Claude Code / OpenCode 的引擎层）。
 
-**当前进度：Day 8 · Token 计量与上下文预算**
+**当前进度：Day 9 · 上下文压缩（Compaction）**
 
 ## 环境要求
 
@@ -29,12 +29,17 @@ MYCODER_WORKSPACE=examples/demo_project uv run mycoder
 # 提示：修复失败的测试，改完后用 pytest 验证通过
 ```
 
-TUI 底栏显示上下文仪表（`▓▓▓░░ 41% (13.2K/32K)`），以 API `usage` 为准。
+TUI 底栏显示上下文仪表（`▓▓▓░░ 41% (13.2K/32K)`），以 API `usage` 为准。窗口涨满时先裁剪过期工具输出，再把早期轮次收成结构化摘要；聊天区会出现「已压缩 N 条早期消息 → 摘要 T token」。
 
 ```bash
 # 上下文窗口（与 TUI 仪表上限对齐，修改后需重启 Ollama）
 launchctl setenv OLLAMA_CONTEXT_LENGTH 32768
 MYCODER_CONTEXT_LENGTH=32768 uv run mycoder   # 可选：覆盖仪表显示上限
+
+# 摘要默认用小模型；可关闭压缩或换模型
+# ollama pull qwen3:4b
+MYCODER_COMPACT_MODEL=qwen3:4b uv run mycoder
+MYCODER_COMPACT=0 uv run mycoder              # 关闭自动压缩（仍可手动观察仪表）
 
 # 8K/16K/32K 窗口速度实测
 uv run python scripts/benchmark_context.py

@@ -3,7 +3,7 @@
 from textual.containers import VerticalScroll
 from textual.widgets import Collapsible, Markdown, Static
 
-from mycoder.events import ToolCallEnd, ToolCallStart
+from mycoder.events import CompactionEvent, ToolCallEnd, ToolCallStart
 from mycoder.tool_summary import summarize_tool_start
 
 
@@ -16,6 +16,24 @@ class ChatPane(VerticalScroll):
         padding: 0 1;
     }
     """
+
+
+class CompactionNotice(Static):
+    """压缩事件：不进入对话气泡，只提示视图已收窄。"""
+
+    DEFAULT_CSS = """
+    CompactionNotice {
+        color: $text-muted;
+        padding: 0 1;
+        margin: 0 0 1 0;
+    }
+    """
+
+    def __init__(self, event: CompactionEvent) -> None:
+        super().__init__(
+            f"[dim]已压缩 {event.compacted_count} 条早期消息 → "
+            f"摘要 {event.summary_tokens} token[/dim]"
+        )
 
 
 class UserBubble(Static):

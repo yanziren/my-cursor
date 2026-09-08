@@ -59,6 +59,15 @@ class UsageUpdate:
 
 
 @dataclass(frozen=True)
+class CompactionEvent:
+    """上下文压缩完成（视图收窄，完整历史仍保留在 messages）。"""
+
+    compacted_count: int
+    summary_tokens: int
+    pruned_tools: int = 0
+
+
+@dataclass(frozen=True)
 class ErrorEvent:
     """不可恢复错误。"""
 
@@ -72,6 +81,7 @@ AgentEvent = (
     | ToolCallEnd
     | TurnEnd
     | UsageUpdate
+    | CompactionEvent
     | ErrorEvent
 )
 
@@ -82,5 +92,6 @@ EventKind = Literal[
     "tool_call_end",
     "turn_end",
     "usage_update",
+    "compaction",
     "error",
 ]

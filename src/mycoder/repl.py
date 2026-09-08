@@ -8,6 +8,7 @@ import time
 from mycoder.agent import Agent
 from mycoder.context.budget import format_meter
 from mycoder.events import (
+    CompactionEvent,
     TextDelta,
     ThinkingDelta,
     ToolCallEnd,
@@ -47,6 +48,11 @@ async def run_turn(agent: Agent, user_input: str) -> None:
             print(f"\n{DIM}{summarize_tool_start(event.name, event.arguments)}{RESET}")
         elif isinstance(event, ToolCallEnd):
             print(f"{DIM}  {event.summary}{RESET}")
+        elif isinstance(event, CompactionEvent):
+            print(
+                f"{DIM}已压缩 {event.compacted_count} 条早期消息 → "
+                f"摘要 {event.summary_tokens} token{RESET}"
+            )
         elif isinstance(event, UsageUpdate):
             mark = "~" if event.estimated else ""
             print(f"{DIM}[上下文 {format_meter(event.used_tokens, event.context_limit)}{mark}]{RESET}")

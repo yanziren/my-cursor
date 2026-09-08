@@ -11,6 +11,7 @@ from textual.widgets import Footer, Header, Input, Static
 from mycoder.agent import Agent
 from mycoder.context.budget import format_meter
 from mycoder.events import (
+    CompactionEvent,
     ErrorEvent,
     TextDelta,
     ThinkingDelta,
@@ -26,6 +27,7 @@ from mycoder.tools.files import workspace_root
 from mycoder.tui.widgets import (
     AssistantBubble,
     ChatPane,
+    CompactionNotice,
     ThinkingBubble,
     ToolBubble,
     UserBubble,
@@ -149,6 +151,11 @@ class MycoderApp(App):
                 tool = self._open_tools.get(event.call_id)
                 if tool is not None:
                     tool.finish(event)
+            elif isinstance(event, CompactionEvent):
+                chat.mount(CompactionNotice(event))
+                self._update_status(
+                    f"已压缩 {event.compacted_count} 条早期消息 → 摘要 {event.summary_tokens} token"
+                )
             elif isinstance(event, UsageUpdate):
                 self._update_context_meter(event.used_tokens, estimated=event.estimated)
             elif isinstance(event, TurnEnd):
@@ -167,8 +174,7 @@ class MycoderApp(App):
     def action_clear_chat(self) -> None:
         chat = self.query_one("#chat", ChatPane)
         chat.remove_children()
-        self.agent.messages = [self.agent.messages[0]]
-        self.agent.budget.used = self.agent.budget.record_estimate(self.agent.messages)
+        self.agent.reset_conversation()
         self._update_context_meter(self.agent.budget.used, estimated=True)
         self._update_status("已清屏")
 
