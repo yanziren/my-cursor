@@ -1,0 +1,54 @@
+"""组装默认 Agent：系统提示词 + 工具 + 会话存储。"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+from mycoder.agent import Agent
+from mycoder.prompts.system import build_system_prompt, estimate_tokens
+from mycoder.providers.ollama import OllamaProvider
+from mycoder.session.store import SessionStore
+from mycoder.tools import DEFAULT_TOOLS, ToolRegistry
+from mycoder.tools.files import workspace_root
+
+
+@dataclass
+class AgentBundle:
+    """TUI / REPL 共用的运行时打包。"""
+
+    agent: Agent
+    provider: OllamaProvider
+    workspace: Path
+    prompt_tokens: int
+    store: SessionStore
+
+
+def create_agent(*, session_id: str | None = None) -> AgentBundle:
+    store = SessionStore.open(session_id) if session_id else SessionStore.create()
+    provider = OllamaProvider()
+    registry = ToolRegistry(DEFAULT_TOOLS)
+    ws = workspace_root()
+    minimal = os.getenv("MYCODER_MINIMAL_PROMPT", "").lower() in {"1", "true", "yes"}
+    system_prompt = build_system_prompt(
+        DEFAULT_TOOLS,
+        ws,
+        include_agents=not os.getenv("MYCODER_SKIP_AGENTS"),
+        minimal=minimal,
+    )
+    max_turns = int(os.getenv("MYCODER_MAX_TURNS", "20"))
+    agent = Agent(
+        provider,
+        registry,
+        system_prompt,
+        max_turns=max_turns,
+        store=store,
+        auto_title=True,
+    )
+    sys_content = agent.messages[0].get("content") if agent.messages else system_prompt
+    prompt_tokens = estimate_tokens(
+        sys_content if isinstance(sys_content, str) else system_prompt
+    )
+    store.ensure_workspace(str(ws))
+    return AgentBundle(agent, provider, ws, prompt_tokens, store)

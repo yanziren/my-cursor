@@ -14,7 +14,7 @@ def _ollama_available() -> bool:
         ):
             pass
         return provider.last_usage is not None
-    except Exception:
+    except Exception:  # noqa: BLE001 — 探测本机 Ollama 是否可用
         return False
 
 

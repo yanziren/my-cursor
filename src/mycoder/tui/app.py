@@ -1,6 +1,5 @@
-"""Day 7 · Textual 终端界面：对话流 + 流式渲染 + 工具折叠。"""
+"""Day 10 · Textual 终端界面：对话流 + 流式渲染 + 会话恢复。"""
 
-import os
 from typing import ClassVar
 
 from textual import work
@@ -8,7 +7,6 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Footer, Header, Input, Static
 
-from mycoder.agent import Agent
 from mycoder.context.budget import format_meter
 from mycoder.events import (
     CompactionEvent,
@@ -20,10 +18,8 @@ from mycoder.events import (
     TurnEnd,
     UsageUpdate,
 )
-from mycoder.prompts.system import build_system_prompt, estimate_tokens
-from mycoder.providers.ollama import OllamaProvider
-from mycoder.tools import DEFAULT_TOOLS, ToolRegistry
-from mycoder.tools.files import workspace_root
+from mycoder.session.bootstrap import AgentBundle, create_agent
+from mycoder.session.store import CompactionEntry, MessageEntry, SessionStore
 from mycoder.tui.widgets import (
     AssistantBubble,
     ChatPane,
@@ -67,26 +63,20 @@ class MycoderApp(App):
         Binding("ctrl+l", "clear_chat", "清屏", show=True),
     )
 
-    def __init__(self) -> None:
+    def __init__(self, bundle: AgentBundle | None = None) -> None:
         super().__init__()
-        provider = OllamaProvider()
-        registry = ToolRegistry(DEFAULT_TOOLS)
-        ws = workspace_root()
-        minimal = os.getenv("MYCODER_MINIMAL_PROMPT", "").lower() in {"1", "true", "yes"}
-        system_prompt = build_system_prompt(
-            DEFAULT_TOOLS,
-            ws,
-            include_agents=not os.getenv("MYCODER_SKIP_AGENTS"),
-            minimal=minimal,
-        )
-        max_turns = int(os.getenv("MYCODER_MAX_TURNS", "20"))
-        self.agent = Agent(provider, registry, system_prompt, max_turns=max_turns)
-        self.provider = provider
-        self.workspace = ws
-        self.prompt_tokens = estimate_tokens(system_prompt)
+        bundle = bundle or create_agent()
+        self.agent = bundle.agent
+        self.provider = bundle.provider
+        self.workspace = bundle.workspace
+        self.prompt_tokens = bundle.prompt_tokens
+        self.store = bundle.store
         self._assistant: AssistantBubble | None = None
         self._thinking: ThinkingBubble | None = None
         self._open_tools: dict[str, ToolBubble] = {}
+        self._restored = any(
+            msg.get("role") == "user" for msg in self.agent.messages
+        )
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -98,7 +88,12 @@ class MycoderApp(App):
 
     def on_mount(self) -> None:
         self._update_context_meter(self.agent.budget.used, estimated=True)
-        self._update_status("就绪")
+        if self._restored:
+            self._hydrate_from_session()
+            turns = sum(1 for msg in self.agent.messages if msg.get("role") == "user")
+            self._update_status(f"已恢复 · {turns} 轮")
+        else:
+            self._update_status("就绪")
         self.query_one(Input).focus()
 
     def _update_context_meter(self, used: int, *, estimated: bool) -> None:
@@ -109,9 +104,55 @@ class MycoderApp(App):
     def _update_status(self, hint: str) -> None:
         bar = self.query_one("#status-bar", Static)
         bar.update(
-            f"{hint} · 模型 {self.provider.model} · 工作区 {self.workspace.name} "
+            f"{hint} · {self.store.short_id} · {self.store.title} · "
+            f"模型 {self.provider.model} · 工作区 {self.workspace.name} "
             f"· 系统提示 ~{self.prompt_tokens} token"
         )
+
+    def _hydrate_from_session(self) -> None:
+        """把磁盘事件流画回聊天区，便于 resume 后接着看。"""
+        chat = self.query_one("#chat", ChatPane)
+        chat.mount(
+            Static(
+                f"[dim]已恢复会话 {self.store.short_id} · {self.store.title}[/dim]"
+            )
+        )
+        snapshot = self.store.replay()
+        for entry in snapshot.entries:
+            if isinstance(entry, CompactionEntry):
+                chat.mount(
+                    CompactionNotice(
+                        CompactionEvent(
+                            compacted_count=entry.compacted_count,
+                            summary_tokens=entry.summary_tokens,
+                        )
+                    )
+                )
+                continue
+            if not isinstance(entry, MessageEntry):
+                continue
+            msg = entry.message
+            role = msg.get("role")
+            if role == "user":
+                chat.mount(UserBubble(str(msg.get("content") or "")))
+            elif role == "assistant":
+                content = msg.get("content") or ""
+                if isinstance(content, str) and content.strip():
+                    bubble = AssistantBubble()
+                    chat.mount(bubble)
+                    bubble.append(content)
+                for call in msg.get("tool_calls") or []:
+                    if not isinstance(call, dict):
+                        continue
+                    fn = call.get("function") or {}
+                    name = str(fn.get("name") or "tool")
+                    chat.mount(Static(f"[dim]工具 {name}[/dim]"))
+            elif role == "tool":
+                preview = str(msg.get("content") or "").replace("\n", " ")
+                if len(preview) > 120:
+                    preview = preview[:117] + "..."
+                chat.mount(Static(f"[dim]  → {preview}[/dim]"))
+        chat.scroll_end(animate=False)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         text = event.value.strip()
@@ -174,13 +215,17 @@ class MycoderApp(App):
     def action_clear_chat(self) -> None:
         chat = self.query_one("#chat", ChatPane)
         chat.remove_children()
+        self.store = SessionStore.create()
+        self.agent.store = self.store
         self.agent.reset_conversation()
+        self.store.ensure_workspace(str(self.workspace))
         self._update_context_meter(self.agent.budget.used, estimated=True)
         self._update_status("已清屏")
 
 
-def main() -> None:
-    MycoderApp().run()
+def main(session_id: str | None = None) -> None:
+    bundle = create_agent(session_id=session_id)
+    MycoderApp(bundle).run()
 
 
 if __name__ == "__main__":

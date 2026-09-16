@@ -2,7 +2,7 @@
 
 按《[30天从零构建Cursor级编程智能体](./30天从零构建Cursor级编程智能体.md)》手册逐天构建的编程智能体（harness 层，对标 Claude Code / OpenCode 的引擎层）。
 
-**当前进度：Day 9 · 上下文压缩（Compaction）**
+**当前进度：Day 10 · 会话持久化与断点恢复**
 
 ## 环境要求
 
@@ -14,11 +14,25 @@
 
 ```bash
 uv sync          # 安装依赖、创建虚拟环境
-uv run mycoder   # 启动 Textual TUI（默认）
+uv run mycoder   # 启动 Textual TUI（默认，自动写入 ~/.mycoder/sessions/）
 uv run mycoder --repl   # 旧版 print REPL，调试用
+uv run mycoder resume          # 列出会话（标题 / 时间 / 轮数）并选择恢复
+uv run mycoder resume <id>     # 按会话 id 或唯一前缀恢复
+uv run mycoder resume --list   # 只列出，不进入
 ```
 
-TUI 快捷键：`Ctrl+C` 退出 · `Ctrl+L` 清屏 · Enter 发送。
+TUI 快捷键：`Ctrl+C` 退出 · `Ctrl+L` 清屏（开新会话，旧日志仍留在磁盘） · Enter 发送。
+
+进程中途 `kill -9` 后，用 `mycoder resume` 选中同一会话即可接着跑：JSONL 是 append-only，崩溃最多丢掉最后半行。恢复时若磁盘上有压缩记录，发给模型的仍是「系统提示 + 摘要 + 最近 K 轮」，不会把已压缩原文塞回去。
+
+```bash
+# 重放任意会话的消息序列（调试器雏形）
+uv run python scripts/replay_session.py ~/.mycoder/sessions/<id>.jsonl
+# 会话文件可直接翻查
+grep tool_call ~/.mycoder/sessions/*.jsonl
+```
+
+会话目录默认 `~/.mycoder/sessions/`，测试或隔离可用 `MYCODER_SESSIONS_DIR` / `MYCODER_HOME` 覆盖。
 
 内置工具：`read_file`、`write_file`、`edit_file`、`bash`、`glob`、`grep`，以及玩具工具 `get_current_time`、`calculator`。文件路径相对项目根，越界路径会被拒绝。工作区根目录默认是当前目录，可用 `MYCODER_WORKSPACE` 覆盖。
 

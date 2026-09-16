@@ -1,8 +1,7 @@
-"""Day 7 · Agent Loop REPL：消费事件流（print 模式，--repl 备用）。"""
+"""Day 10 · Agent Loop REPL：消费事件流（print 模式，--repl 备用）。"""
 
 import asyncio
 import json
-import os
 import time
 
 from mycoder.agent import Agent
@@ -16,11 +15,9 @@ from mycoder.events import (
     TurnEnd,
     UsageUpdate,
 )
-from mycoder.prompts.system import build_system_prompt, estimate_tokens
-from mycoder.providers.ollama import OllamaProvider
+from mycoder.session.bootstrap import create_agent
+from mycoder.session.store import SessionStore
 from mycoder.tool_summary import summarize_tool_start
-from mycoder.tools import DEFAULT_TOOLS, ToolRegistry
-from mycoder.tools.files import workspace_root
 
 DIM, RESET = "\033[2m", "\033[0m"
 
@@ -73,26 +70,25 @@ async def run_turn(agent: Agent, user_input: str) -> None:
     print_messages(agent.messages)
 
 
-def main() -> None:
-    provider = OllamaProvider()
-    registry = ToolRegistry(DEFAULT_TOOLS)
-    ws = workspace_root()
-    minimal = os.getenv("MYCODER_MINIMAL_PROMPT", "").lower() in {"1", "true", "yes"}
-    system_prompt = build_system_prompt(
-        DEFAULT_TOOLS,
-        ws,
-        include_agents=not os.getenv("MYCODER_SKIP_AGENTS"),
-        minimal=minimal,
+def main(session_id: str | None = None) -> None:
+    bundle = create_agent(session_id=session_id)
+    agent = bundle.agent
+    store = bundle.store
+    restored = any(msg.get("role") == "user" for msg in agent.messages)
+    user_turns = sum(1 for msg in agent.messages if msg.get("role") == "user")
+    resume_line = (
+        f"已恢复 · {user_turns} 轮 · {store.title}\n"
+        if restored
+        else "新会话\n"
     )
-    max_turns = int(os.getenv("MYCODER_MAX_TURNS", "20"))
-    agent = Agent(provider, registry, system_prompt, max_turns=max_turns)
-    prompt_tokens = estimate_tokens(system_prompt)
 
     print(
-        f"mycoder · REPL 模式 · 模型 {provider.model} · max_turns={max_turns}\n"
-        f"工作区: {ws} · 系统提示词约 {prompt_tokens} token"
-        f"{' (minimal)' if minimal else ''}\n"
-        "命令: /exit · /messages · /prompt\n"
+        f"mycoder · REPL 模式 · 模型 {bundle.provider.model} · "
+        f"max_turns={agent.max_turns}\n"
+        f"工作区: {bundle.workspace} · 系统提示词约 {bundle.prompt_tokens} token\n"
+        f"会话: {store.session_id} · {store.path}\n"
+        f"{resume_line}"
+        "命令: /exit · /messages · /prompt · /session\n"
         "提示: 默认请用 TUI（uv run mycoder），本模式供调试"
     )
 
@@ -110,9 +106,24 @@ def main() -> None:
             print_messages(agent.messages)
             continue
         if user_input == "/prompt":
-            print(f"\n{DIM}--- 系统提示词 (~{prompt_tokens} token) ---{RESET}")
-            print(system_prompt)
+            system = agent.messages[0].get("content") if agent.messages else ""
+            print(f"\n{DIM}--- 系统提示词 (~{bundle.prompt_tokens} token) ---{RESET}")
+            print(system)
             print(f"{DIM}--- 结束 ---{RESET}\n")
+            continue
+        if user_input == "/session":
+            print(
+                f"\n{DIM}id={store.session_id}\n"
+                f"title={store.title}\n"
+                f"path={store.path}{RESET}\n"
+            )
+            continue
+        if user_input == "/clear":
+            store = SessionStore.create()
+            agent.store = store
+            agent.reset_conversation()
+            store.ensure_workspace(str(bundle.workspace))
+            print(f"{DIM}已开新会话 {store.session_id}{RESET}")
             continue
 
         asyncio.run(run_turn(agent, user_input))

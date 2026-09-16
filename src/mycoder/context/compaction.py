@@ -55,7 +55,7 @@ class CompactConfig:
 
 @dataclass(frozen=True)
 class CompactionRecord:
-    """一次压缩的视图记录。原文仍在 messages 里，Day 10 可把此类写成会话 entry。"""
+    """一次压缩的视图记录。原文仍在 messages 里；JSONL 里对应 compaction entry。"""
 
     summary: str
     compacted_count: int
