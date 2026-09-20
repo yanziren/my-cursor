@@ -59,9 +59,7 @@ MYCODER_COMPACT=0 uv run mycoder              # 关闭自动压缩（仍可手�
 uv run python scripts/benchmark_context.py
 ```
 
-详见 [Ollama 上下文实测](./docs/ollama_context_benchmark.md)。
-
-Day 7 里程碑（见 [第一周复盘](./docs/week1_retrospective.md)）：
+Day 7 里程碑：
 
 ```bash
 MYCODER_WORKSPACE=examples/demo_project uv run mycoder
