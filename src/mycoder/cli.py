@@ -1,4 +1,4 @@
-"""Day 10 · CLI 入口：默认 TUI，--repl 保留 print 模式，resume 恢复会话。"""
+"""Day 11 · CLI 入口：默认 TUI，--repl 保留 print 模式，resume 恢复会话。"""
 
 from __future__ import annotations
 

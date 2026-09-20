@@ -138,6 +138,15 @@ class ToolBubble(Static):
             collapsed=True,
         )
 
+    def mark_waiting(self) -> None:
+        """权限 ask 时把「执行中」改成等待审批，避免用户以为已经跑了。"""
+        if self._finished:
+            return
+        collapsible = self.query_one(Collapsible)
+        collapsible.title = f"{self._title}  等待审批…"
+        detail = self.query_one(".tool-detail", Static)
+        detail.update("等待用户审批…")
+
     def finish(self, end: ToolCallEnd) -> None:
         if self._finished:
             return

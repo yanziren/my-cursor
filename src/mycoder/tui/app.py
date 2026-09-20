@@ -1,4 +1,4 @@
-"""Day 10 · Textual 终端界面：对话流 + 流式渲染 + 会话恢复。"""
+"""Day 11 · Textual 终端界面：对话流 + 会话恢复 + 权限审批。"""
 
 from typing import ClassVar
 
@@ -18,8 +18,10 @@ from mycoder.events import (
     TurnEnd,
     UsageUpdate,
 )
+from mycoder.permissions.pipeline import PermissionRequest, UserChoice
 from mycoder.session.bootstrap import AgentBundle, create_agent
 from mycoder.session.store import CompactionEntry, MessageEntry, SessionStore
+from mycoder.tui.approval import ApprovalScreen
 from mycoder.tui.widgets import (
     AssistantBubble,
     ChatPane,
@@ -77,6 +79,7 @@ class MycoderApp(App):
         self._restored = any(
             msg.get("role") == "user" for msg in self.agent.messages
         )
+        self.agent.approver = self._approve
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -100,6 +103,14 @@ class MycoderApp(App):
         meter = format_meter(used, self.agent.budget.limit)
         suffix = " ~" if estimated else ""
         self.query_one("#context-bar", Static).update(f"上下文 {meter}{suffix}")
+
+    async def _approve(self, request: PermissionRequest) -> UserChoice:
+        """Agent 在 dispatch 前 await 这里；ModalScreen 让出事件环，按钮仍可点。"""
+        self._update_status("等待审批…")
+        tool = self._open_tools.get(request.call_id)
+        if tool is not None:
+            tool.mark_waiting()
+        return await self.push_screen_wait(ApprovalScreen(request))
 
     def _update_status(self, hint: str) -> None:
         bar = self.query_one("#status-bar", Static)

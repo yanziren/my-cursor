@@ -2,7 +2,7 @@
 
 按《[30天从零构建Cursor级编程智能体](./30天从零构建Cursor级编程智能体.md)》手册逐天构建的编程智能体（harness 层，对标 Claude Code / OpenCode 的引擎层）。
 
-**当前进度：Day 10 · 会话持久化与断点恢复**
+**当前进度：Day 11 · 权限系统（allow / ask / deny）**
 
 ## 环境要求
 
@@ -21,7 +21,7 @@ uv run mycoder resume <id>     # 按会话 id 或唯一前缀恢复
 uv run mycoder resume --list   # 只列出，不进入
 ```
 
-TUI 快捷键：`Ctrl+C` 退出 · `Ctrl+L` 清屏（开新会话，旧日志仍留在磁盘） · Enter 发送。
+TUI 快捷键：`Ctrl+C` 退出 · `Ctrl+L` 清屏（开新会话，旧日志仍留在磁盘） · Enter 发送。危险 bash（如 `rm`、`git push`）会弹出审批卡片：允许一次 / 本会话总是允许 / 拒绝。规则见 `~/.mycoder/config.toml` 与项目 `.mycoder/config.toml`（项目覆盖全局）。
 
 进程中途 `kill -9` 后，用 `mycoder resume` 选中同一会话即可接着跑：JSONL 是 append-only，崩溃最多丢掉最后半行。恢复时若磁盘上有压缩记录，发给模型的仍是「系统提示 + 摘要 + 最近 K 轮」，不会把已压缩原文塞回去。
 

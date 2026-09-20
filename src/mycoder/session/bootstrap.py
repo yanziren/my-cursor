@@ -1,4 +1,4 @@
-"""组装默认 Agent：系统提示词 + 工具 + 会话存储。"""
+"""组装默认 Agent：系统提示词 + 工具 + 会话存储 + 权限管道。"""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from mycoder.agent import Agent
+from mycoder.permissions.pipeline import PermissionPipeline
 from mycoder.prompts.system import build_system_prompt, estimate_tokens
 from mycoder.providers.ollama import OllamaProvider
 from mycoder.session.store import SessionStore
@@ -45,6 +46,7 @@ def create_agent(*, session_id: str | None = None) -> AgentBundle:
         max_turns=max_turns,
         store=store,
         auto_title=True,
+        permissions=PermissionPipeline.from_workspace(ws),
     )
     sys_content = agent.messages[0].get("content") if agent.messages else system_prompt
     prompt_tokens = estimate_tokens(

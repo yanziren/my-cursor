@@ -1,4 +1,4 @@
-"""Day 10 · Agent Loop REPL：消费事件流（print 模式，--repl 备用）。"""
+"""Day 11 · Agent Loop REPL：消费事件流（print 模式，--repl 备用）。"""
 
 import asyncio
 import json
@@ -15,11 +15,32 @@ from mycoder.events import (
     TurnEnd,
     UsageUpdate,
 )
+from mycoder.permissions.pipeline import PermissionRequest, UserChoice
 from mycoder.session.bootstrap import create_agent
 from mycoder.session.store import SessionStore
 from mycoder.tool_summary import summarize_tool_start
 
 DIM, RESET = "\033[2m", "\033[0m"
+
+
+async def stdin_approver(request: PermissionRequest) -> UserChoice:
+    """REPL 调试用：阻塞在后台线程读 stdin，避免卡住事件环。"""
+    prompt = (
+        f"\n权限审批 · {request.tool_name}\n"
+        f"{request.preview}\n"
+        f"原因: {request.reason}\n"
+        "[a]允许一次  [s]本会话总是允许  [d]拒绝: "
+    )
+
+    def _ask() -> UserChoice:
+        raw = input(prompt).strip().lower()
+        if raw in {"a", "allow", "y", "yes"}:
+            return UserChoice("allow_once")
+        if raw in {"s", "session", "always"}:
+            return UserChoice("allow_session")
+        return UserChoice("deny")
+
+    return await asyncio.to_thread(_ask)
 
 
 def print_messages(messages: list[dict]) -> None:
@@ -73,6 +94,7 @@ async def run_turn(agent: Agent, user_input: str) -> None:
 def main(session_id: str | None = None) -> None:
     bundle = create_agent(session_id=session_id)
     agent = bundle.agent
+    agent.approver = stdin_approver
     store = bundle.store
     restored = any(msg.get("role") == "user" for msg in agent.messages)
     user_turns = sum(1 for msg in agent.messages if msg.get("role") == "user")

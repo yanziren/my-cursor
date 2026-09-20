@@ -1,5 +1,6 @@
-"""Day 10 · Agent Loop：事件流 + 压缩视图 + JSONL 会话落盘。"""
+"""Day 11 · Agent Loop：事件流 + 压缩视图 + JSONL 落盘 + 工具权限闸门。"""
 
+import json
 import os
 from collections.abc import AsyncIterator, Callable
 
@@ -21,6 +22,11 @@ from mycoder.events import (
     ToolCallStart,
     TurnEnd,
     UsageUpdate,
+)
+from mycoder.permissions.pipeline import (
+    Approver,
+    PermissionPipeline,
+    format_denial,
 )
 from mycoder.providers.ollama import ChatResponse, OllamaProvider
 from mycoder.session.store import (
@@ -51,6 +57,8 @@ class Agent:
         store: SessionStore | None = None,
         title_generator: Callable[[str], str] | None = None,
         auto_title: bool = False,
+        permissions: PermissionPipeline | None = None,
+        approver: Approver | None = None,
     ) -> None:
         self.provider = provider
         self.registry = registry
@@ -63,6 +71,8 @@ class Agent:
         self._title_attempted = False
         self._compact_provider: OllamaProvider | None = None
         self.store = store
+        self.permissions = permissions
+        self.approver = approver
         self.compaction_records: list[CompactionRecord] = []
         self.messages: list[dict] = [{"role": "system", "content": system_prompt}]
         if store is not None:
@@ -81,6 +91,8 @@ class Agent:
         self.messages = [system]
         self.compaction_records = []
         self._title_attempted = False
+        if self.permissions is not None:
+            self.permissions.clear_session()
         self.budget.record_estimate(self.messages)
         if self.store is not None and not self.store.read_entries():
             self.store.append_model_change(self.provider.model)
@@ -207,6 +219,26 @@ class Agent:
             pruned_tools=result.pruned_tools,
         )
 
+    async def _dispatch_tool(self, name: str, arguments: str, call_id: str) -> str:
+        """dispatch 之前过权限闸门；deny 不执行，把理由当 tool 结果回传。"""
+        if self.permissions is None:
+            return await self.registry.dispatch(name, arguments)
+        try:
+            raw = json.loads(arguments) if arguments.strip() else {}
+        except json.JSONDecodeError:
+            # 解析失败交给 registry 报给模型，权限链没有可匹配的参数
+            return await self.registry.dispatch(name, arguments)
+        params = raw if isinstance(raw, dict) else {}
+        decision = await self.permissions.authorize(
+            name,
+            params,
+            approver=self.approver,
+            call_id=call_id,
+        )
+        if decision.action == "deny":
+            return format_denial(decision.reason)
+        return await self.registry.dispatch(name, arguments)
+
     async def run(self, user_input: str) -> AsyncIterator[AgentEvent]:
         """执行一轮用户任务，异步产出类型化事件。"""
         self._persist_message({"role": "user", "content": user_input})
@@ -260,7 +292,7 @@ class Agent:
                     name = call.function.name
                     arguments = call.function.arguments
                     yield ToolCallStart(call.id, name, arguments)
-                    result = await self.registry.dispatch(name, arguments)
+                    result = await self._dispatch_tool(name, arguments, call.id)
                     yield ToolCallEnd(
                         call.id, name, result, summarize_tool_result(name, result)
                     )
