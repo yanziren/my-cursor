@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from mycoder.prompts.agents_md import collect_agents_md
+from mycoder.sandbox.docker_exec import SandboxMode
 from mycoder.tools.base import BaseTool
 from mycoder.tools.files import workspace_root
 
@@ -63,6 +64,30 @@ def _tool_guide(tools: list[BaseTool]) -> str:
     return "\n".join(lines)
 
 
+def sandbox_section(mode: SandboxMode) -> str | None:
+    """沙箱开启时告诉模型：没网、没有宿主家目录、readonly 不能写。"""
+    if mode == "off":
+        return None
+    lines = [
+        "## 沙箱",
+        f"- bash 在 Docker 容器内执行，模式 {mode}，默认无网络。",
+        (
+            "- curl、pip install、npm install 会失败。看到无网络后不要重试同类命令，"
+            "改用容器里已有的 python、git、rg、pytest，或告诉用户把沙箱设为 off。"
+        ),
+        "- 宿主家目录和 ~/.ssh 在容器里不存在，不要去读。",
+        "- 工作区在容器内的路径是 /workspace。",
+    ]
+    if mode == "readonly":
+        lines.append("- 容器和工作区都是只读的，不要改文件，不要用重定向写入。")
+    else:
+        lines.append(
+            "- 只有工作区挂载可写。改 /workspace 里的文件会写回宿主项目；"
+            "改 /etc 等其他路径只影响这只容器，销毁后消失。"
+        )
+    return "\n".join(lines)
+
+
 def build_system_prompt(
     tools: list[BaseTool],
     workspace: Path | None = None,
@@ -70,6 +95,7 @@ def build_system_prompt(
     include_agents: bool = True,
     include_environment: bool = True,
     minimal: bool = False,
+    sandbox_mode: SandboxMode = "off",
 ) -> str:
     """拼装系统提示词；minimal=True 时仅保留极简身份（供对比实验）。"""
     ws = (workspace or workspace_root()).resolve()
@@ -100,6 +126,9 @@ def build_system_prompt(
     )
 
     parts = [identity, work_rules, tool_section, security]
+    sandbox = sandbox_section(sandbox_mode)
+    if sandbox:
+        parts.append(sandbox)
 
     if include_agents:
         agents = collect_agents_md(ws)
@@ -119,6 +148,7 @@ def build_system_prompt(
             include_agents=include_agents,
             include_environment=False,
             minimal=False,
+            sandbox_mode=sandbox_mode,
         )
         if include_environment:
             env = collect_environment(ws).splitlines()[:4]

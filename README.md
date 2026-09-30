@@ -2,7 +2,7 @@
 
 按《[30天从零构建Cursor级编程智能体](./30天从零构建Cursor级编程智能体.md)》手册逐天构建的编程智能体（harness 层，对标 Claude Code / OpenCode 的引擎层）。
 
-**当前进度：Day 11 · 权限系统（allow / ask / deny）**
+**当前进度：Day 12 · Docker 沙箱（off / workspace-write / readonly）**
 
 ## 环境要求
 
@@ -21,7 +21,22 @@ uv run mycoder resume <id>     # 按会话 id 或唯一前缀恢复
 uv run mycoder resume --list   # 只列出，不进入
 ```
 
-TUI 快捷键：`Ctrl+C` 退出 · `Ctrl+L` 清屏（开新会话，旧日志仍留在磁盘） · Enter 发送。危险 bash（如 `rm`、`git push`）会弹出审批卡片：允许一次 / 本会话总是允许 / 拒绝。规则见 `~/.mycoder/config.toml` 与项目 `.mycoder/config.toml`（项目覆盖全局）。
+TUI 快捷键：`Ctrl+C` 退出 · `Ctrl+L` 清屏（开新会话，旧日志仍留在磁盘） · Enter 发送。底栏会显示当前沙箱模式。危险 bash（如 `rm`、`git push`）会弹出审批卡片：允许一次 / 本会话总是允许 / 拒绝。规则见 `~/.mycoder/config.toml` 与项目 `.mycoder/config.toml`（项目覆盖全局）。
+
+沙箱默认 `off`（宿主直接执行 bash）。容器模式只挂载工作区、默认断网，会话开始时起一只持久容器，退出时销毁。优先级：环境变量 `MYCODER_SANDBOX` > 项目 `.mycoder/config.toml` > `~/.mycoder/config.toml`。
+
+```bash
+MYCODER_SANDBOX=workspace-write uv run mycoder   # 容器内，仅工作区可写
+MYCODER_SANDBOX=readonly uv run mycoder          # 容器内全只读
+MYCODER_SANDBOX=off uv run mycoder               # 回到宿主直跑
+```
+
+```toml
+[sandbox]
+mode = "workspace-write"   # off | workspace-write | readonly
+```
+
+首次进入容器模式会构建镜像 `mycoder-sandbox:dev`（Python、Node、git、ripgrep、pytest）。需要本机 Docker 已启动。守护进程没开时，bash 会返回错误，不会退回宿主执行。
 
 进程中途 `kill -9` 后，用 `mycoder resume` 选中同一会话即可接着跑：JSONL 是 append-only，崩溃最多丢掉最后半行。恢复时若磁盘上有压缩记录，发给模型的仍是「系统提示 + 摘要 + 最近 K 轮」，不会把已压缩原文塞回去。
 

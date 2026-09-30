@@ -1,4 +1,4 @@
-"""Day 11 · Agent Loop REPL：消费事件流（print 模式，--repl 备用）。"""
+"""Day 12 · Agent Loop REPL：消费事件流，退出时销毁沙箱容器。"""
 
 import asyncio
 import json
@@ -16,7 +16,8 @@ from mycoder.events import (
     UsageUpdate,
 )
 from mycoder.permissions.pipeline import PermissionRequest, UserChoice
-from mycoder.session.bootstrap import create_agent
+from mycoder.sandbox.docker_exec import SandboxError, status_label
+from mycoder.session.bootstrap import AgentBundle, create_agent
 from mycoder.session.store import SessionStore
 from mycoder.tool_summary import summarize_tool_start
 
@@ -104,16 +105,33 @@ def main(session_id: str | None = None) -> None:
         else "新会话\n"
     )
 
-    print(
-        f"mycoder · REPL 模式 · 模型 {bundle.provider.model} · "
-        f"max_turns={agent.max_turns}\n"
-        f"工作区: {bundle.workspace} · 系统提示词约 {bundle.prompt_tokens} token\n"
-        f"会话: {store.session_id} · {store.path}\n"
-        f"{resume_line}"
-        "命令: /exit · /messages · /prompt · /session\n"
-        "提示: 默认请用 TUI（uv run mycoder），本模式供调试"
-    )
+    async def _boot() -> None:
+        await bundle.executor.start()
 
+    try:
+        try:
+            asyncio.run(_boot())
+        except SandboxError as exc:
+            print(f"沙箱启动失败: {exc}")
+            return
+
+        print(
+            f"mycoder · REPL 模式 · 模型 {bundle.provider.model} · "
+            f"max_turns={agent.max_turns} · {status_label(bundle.sandbox_mode)}\n"
+            f"工作区: {bundle.workspace} · 系统提示词约 {bundle.prompt_tokens} token\n"
+            f"会话: {store.session_id} · {store.path}\n"
+            f"{resume_line}"
+            "命令: /exit · /messages · /prompt · /session\n"
+            "提示: 默认请用 TUI（uv run mycoder），本模式供调试"
+        )
+        _repl_loop(bundle)
+    finally:
+        asyncio.run(bundle.executor.aclose())
+
+
+def _repl_loop(bundle: AgentBundle) -> None:
+    agent = bundle.agent
+    store = bundle.store
     while True:
         try:
             user_input = input("\n> ").strip()

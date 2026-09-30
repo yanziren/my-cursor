@@ -1,4 +1,4 @@
-"""Day 11 · Textual 终端界面：对话流 + 会话恢复 + 权限审批。"""
+"""Day 12 · Textual 终端界面：对话流、权限审批，状态栏显示沙箱模式。"""
 
 from typing import ClassVar
 
@@ -19,6 +19,7 @@ from mycoder.events import (
     UsageUpdate,
 )
 from mycoder.permissions.pipeline import PermissionRequest, UserChoice
+from mycoder.sandbox.docker_exec import SandboxError, status_label
 from mycoder.session.bootstrap import AgentBundle, create_agent
 from mycoder.session.store import CompactionEntry, MessageEntry, SessionStore
 from mycoder.tui.approval import ApprovalScreen
@@ -73,6 +74,8 @@ class MycoderApp(App):
         self.workspace = bundle.workspace
         self.prompt_tokens = bundle.prompt_tokens
         self.store = bundle.store
+        self.executor = bundle.executor
+        self.sandbox_mode = bundle.sandbox_mode
         self._assistant: AssistantBubble | None = None
         self._thinking: ThinkingBubble | None = None
         self._open_tools: dict[str, ToolBubble] = {}
@@ -89,15 +92,26 @@ class MycoderApp(App):
         yield Input(placeholder="输入任务，Enter 发送 · Ctrl+L 清屏 · Ctrl+C 退出", id="prompt")
         yield Footer()
 
-    def on_mount(self) -> None:
+    async def on_mount(self) -> None:
         self._update_context_meter(self.agent.budget.used, estimated=True)
         if self._restored:
             self._hydrate_from_session()
             turns = sum(1 for msg in self.agent.messages if msg.get("role") == "user")
-            self._update_status(f"已恢复 · {turns} 轮")
+            hint = f"已恢复 · {turns} 轮"
         else:
-            self._update_status("就绪")
+            hint = "就绪"
         self.query_one(Input).focus()
+        if self.sandbox_mode != "off":
+            self._update_status("正在启动沙箱…")
+            try:
+                await self.executor.start()
+            except SandboxError as exc:
+                self._update_status(f"沙箱启动失败 · {exc}")
+                return
+        self._update_status(hint)
+
+    async def on_unmount(self) -> None:
+        await self.executor.aclose()
 
     def _update_context_meter(self, used: int, *, estimated: bool) -> None:
         meter = format_meter(used, self.agent.budget.limit)
@@ -115,9 +129,9 @@ class MycoderApp(App):
     def _update_status(self, hint: str) -> None:
         bar = self.query_one("#status-bar", Static)
         bar.update(
-            f"{hint} · {self.store.short_id} · {self.store.title} · "
-            f"模型 {self.provider.model} · 工作区 {self.workspace.name} "
-            f"· 系统提示 ~{self.prompt_tokens} token"
+            f"{hint} · {status_label(self.sandbox_mode)} · {self.store.short_id} · "
+            f"{self.store.title} · 模型 {self.provider.model} · "
+            f"工作区 {self.workspace.name} · 系统提示 ~{self.prompt_tokens} token"
         )
 
     def _hydrate_from_session(self) -> None:
