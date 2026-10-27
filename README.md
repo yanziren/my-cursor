@@ -1,6 +1,6 @@
 # mycoder
 
-按《[30天从零构建Cursor级编程智能体](./30天从零构建Cursor级编程智能体.md)》手册逐天构建的编程智能体（harness 层，对标 Claude Code / OpenCode 的引擎层）。
+编程智能体（harness 层，对标 Claude Code / OpenCode 的引擎层）。
 
 **当前进度：Day 12 · Docker 沙箱（off / workspace-write / readonly）**
 
